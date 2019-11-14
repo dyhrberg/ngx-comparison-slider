@@ -1,6 +1,6 @@
-import { Component, Input, OnInit, AfterViewInit, ViewChild, ElementRef, Renderer2 } from '@angular/core';
-import { of, fromEvent, merge } from 'rxjs';
-import { mapTo, mergeMap, takeUntil } from 'rxjs/operators';
+import { Component, Input, OnInit, AfterViewInit, ViewChild, ElementRef, Renderer2, Self, HostListener } from '@angular/core';
+import { of, fromEvent, merge, Observable } from 'rxjs';
+import { mapTo, mergeMap, takeUntil, tap } from 'rxjs/operators';
 
 @Component({
   selector: 'app-ngx-comparison-slider',
@@ -8,105 +8,141 @@ import { mapTo, mergeMap, takeUntil } from 'rxjs/operators';
   styleUrls: ['./ngx-comparison-slider.component.css']
 })
 export class NgxComparisonSliderComponent implements OnInit, AfterViewInit {
-
   @Input() preImageUrl: string;
   @Input() postImageUrl: string;
+  @Input() startPosPct: number; // Not implemented
+  @Input() minPosPct: number; // Not implemented
+  @Input() maxPosPct: number; // Not implemented
 
+  @ViewChild('slider', { static: true }) slider: ElementRef;
   @ViewChild('preImg', { static: true }) preImage: ElementRef;
   @ViewChild('postImg', { static: true }) postImage: ElementRef;
+  @ViewChild('resizer', { static: true }) resizer: ElementRef;
+  @ViewChild('grip', { static: false }) grip: ElementRef;
 
-  slider: HTMLElement;
-  img: number = 0;
-  clicked: number = 0;
-  componentWidth: number = 0;
-  componentHeight: number = 0;
-  sliderHeight: number = 0;
-  sliderWidth: number = 0;
+  sliderActive$: Observable<Event>;
 
-  sliderActive$;
-  constructor(private el: ElementRef, private renderer: Renderer2) { }
+  componentHeight = 0;
+  componentWidth = 0;
 
-  ngOnInit() { }
+  sliderWidth = 0;
+  sliderHeight = 0;
 
-  ngAfterViewInit() { }
+  sliderPositionPct = 0;
 
-  // drags(dragElement, resizeElement, container) {
-	
-  //   // Initialize the dragging event on mousedown.
-  //   dragElement.on('mousedown touchstart', function(e) {
-      
-  //     dragElement.addClass('draggable');
-  //     resizeElement.addClass('resizable');
-      
-  //     // Check if it's a mouse or touch event and pass along the correct value
-  //     var startX = (e.pageX) ? e.pageX : e.originalEvent.touches[0].pageX;
-      
-  //     // Get the initial position
-  //     var dragWidth = dragElement.outerWidth(),
-  //         posX = dragElement.offset().left + dragWidth - startX,
-  //         containerOffset = container.offset().left,
-  //         containerWidth = container.outerWidth();
-   
-  //     // Set limits
-  //     minLeft = containerOffset + 10;
-  //     maxLeft = containerOffset + containerWidth - dragWidth - 10;
-      
-  //     // Calculate the dragging distance on mousemove.
-  //     dragElement.parents().on("mousemove touchmove", function(e) {
-        
-  //       // Check if it's a mouse or touch event and pass along the correct value
-  //       var moveX = (e.pageX) ? e.pageX : e.originalEvent.touches[0].pageX;
-        
-  //       leftValue = moveX + posX - dragWidth;
-        
-  //       // Prevent going off limits
-  //       if ( leftValue < minLeft) {
-  //         leftValue = minLeft;
-  //       } else if (leftValue > maxLeft) {
-  //         leftValue = maxLeft;
-  //       }
-        
-  //       // Translate the handle's left value to masked divs width.
-  //       widthValue = (leftValue + dragWidth/2 - containerOffset)*100/containerWidth+'%';
-        
-  //       // Set the new values for the slider and the handle. 
-  //       // Bind mouseup events to stop dragging.
-  //       $('.draggable').css('left', widthValue).on('mouseup touchend touchcancel', function () {
-  //         $(this).removeClass('draggable');
-  //         resizeElement.removeClass('resizable');
-  //       });
-  //       $('.resizable').css('width', widthValue);
-  //     }).on('mouseup touchend touchcancel', function(){
-  //       dragElement.removeClass('draggable');
-  //       resizeElement.removeClass('resizable');
-  //     });
-  //     e.preventDefault();
-  //   }).on('mouseup touchend touchcancel', function(e){
-  //     dragElement.removeClass('draggable');
-  //     resizeElement.removeClass('resizable');
-  //   });
-  // }
+  constructor(@Self() private self: ElementRef, private renderer: Renderer2) {}
 
+  ngOnInit() {}
+
+  ngAfterViewInit() {
+    // Setting the initial size of the postImage
+    this.matchImageSizeToComponent();
+
+    this.setupDraggingEventStream();
+
+    this.sliderActive$.subscribe(movement => {
+      // Get the cursor's x position
+      let gripPosition = this.getCursorPos(movement);
+
+      // Prevent the slider from being positioned outside the image
+      if (gripPosition < 0) {
+        gripPosition = 0;
+      }
+
+      if (gripPosition > this.componentWidth) {
+        gripPosition = this.componentWidth;
+      }
+
+      // Persising position as pct to recalculate position during resize
+      this.sliderPositionPct = gripPosition / this.componentWidth;
+      // console.log(this.sliderPositionPct);
+
+      // this.sliderPositionPct = this.startPosPct;
+
+      // Change size of resizer, according to the grip
+      this.resize(this.sliderPositionPct);
+    });
+  }
+
+  @HostListener('window:resize', ['$event.target'])
+  onResize() {
+    this.matchImageSizeToComponent();
+    this.resize(this.sliderPositionPct);
+  }
+
+  setupDraggingEventStream() {
+    // Setting up 'down events'
+    const mouseDown$ = fromEvent(this.grip.nativeElement, 'mousedown');
+    const touchDown$ = fromEvent(this.grip.nativeElement, 'touchstart');
+    const down$ = merge(mouseDown$, touchDown$).pipe(
+      tap((event: MouseEvent) => {
+        event.stopPropagation(); // Prevent dragging the images (not sure if this is appropriate or even works)
+        this.grip.nativeElement.classList.add('draggable');
+        this.resizer.nativeElement.classList.add('resizable');
+        // this.renderer.setAttribute(this.grip.nativeElement, 'class', 'draggable');
+        // this.renderer.setAttribute(this.resizer.nativeElement, 'class', 'resizable');
+      })
+    );
+
+    // Setting up 'up events'
+    const mouseUp$ = fromEvent(window, 'mouseup');
+    const touchUp$ = fromEvent(window, 'touchstop touchend touchcancel');
+    const touchEnd$ = fromEvent(window, 'touchend');
+    const touchCancel$ = fromEvent(window, 'touchcancel');
+    const up$ = merge(mouseUp$, touchUp$, touchEnd$, touchCancel$).pipe(
+      tap(() => {
+        this.grip.nativeElement.classList.remove('draggable');
+        this.resizer.nativeElement.classList.remove('resizable');
+        // this.renderer.removeAttribute(this.grip.nativeElement, 'class', 'draggable');
+        // this.renderer.removeAttribute(this.resizer.nativeElement, 'class', 'resizable');
+      })
+    );
+
+    const mouseMove$ = fromEvent(window, 'mousemove');
+    const touchMove$ = fromEvent(window, 'touchmove');
+    const move$ = merge(mouseMove$, touchMove$);
+    // touchMove$.subscribe((result: TouchEvent) => console.log(result.touches[0].screenX));
+
+    this.sliderActive$ = down$.pipe(mergeMap(down => move$.pipe(takeUntil(up$))));
+  }
+
+  matchImageSizeToComponent() {
+    // Persist slider component width (after view init)
+    this.componentWidth = this.slider.nativeElement.offsetWidth;
+
+    // Set width of postImage to same size as slider component
+    this.renderer.setStyle(this.postImage.nativeElement, 'width', this.componentWidth + 'px');
+  }
+
+  getCursorPos(event): number {
+    // Standard way of saying "if the parameter was not passed, default it
+    // to whatever's after the ||". In this case, if the event parameter is not
+    // passed, then it looks for the global variable.
+    event = event || window.event;
+
+    event.stopPropagation();
+
+    // Get the rect position of the image
+    const elementRect = this.postImage.nativeElement.getBoundingClientRect();
+
+    // Get the right value for curser position. Differnt for touch and mouse
+    const cursorX = event.pageX ? event.pageX : event.touches[0].pageX;
+
+    // Calculate the cursor's x coordinate, relative to the image
+    let imgRelativePosX = cursorX - elementRect.left;
+
+    // Consider any page scrolling
+    imgRelativePosX = imgRelativePosX - window.pageXOffset;
+
+    return imgRelativePosX;
+  }
+
+  resize(sliderPositionPct: number) {
+    // Recalculate position from pct to px
+    const resizePosition = this.componentWidth * sliderPositionPct;
+    // Resize the image by changing the size of the resizer
+    this.renderer.setStyle(this.resizer.nativeElement, 'width', resizePosition + 'px');
+    // Position the grip
+    this.renderer.setStyle(this.grip.nativeElement, 'left', resizePosition - this.sliderWidth / 4 + 'px');
+  }
 }
-
-// Call & init
-// $(document).ready(function(){
-//   $('.ba-slider').each(function(){
-//     var cur = $(this);
-//     // Adjust the slider
-//     var width = cur.width()+'px';
-//     cur.find('.resize img').css('width', width);
-//     // Bind dragging events
-//     drags(cur.find('.handle'), cur.find('.resize'), cur);
-//   });
-// });
-
-// // Update sliders on resize.
-// // We all do it: i.imgur.com/YkbaV.gif
-// $(window).resize(function(){
-//   $('.ba-slider').each(function(){
-//     var cur = $(this);
-//     var width = cur.width()+'px';
-//     cur.find('.resize img').css('width', width);
-//   });
-// });

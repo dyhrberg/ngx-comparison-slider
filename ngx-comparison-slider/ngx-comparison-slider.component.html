@@ -1,7 +1,7 @@
-<div class="ba-slider">
-  <img src="{{ preImageUrl }}" draggable="false" #preImg>
-  <div class="resize" #postImgFrame>
-    <img src="{{ postImageUrl }}" draggable="false" #postImg>
+<div class="slider" #slider>
+  <img src="{{ preImageUrl }}" #preImg />
+  <div class="resizer" #resizer>
+    <img src="{{ postImageUrl }}" #postImg />
   </div>
-  <span class="handle"></span>
+  <span class="grip" #grip></span>
 </div>
