@@ -6,6 +6,10 @@ Image comparison slider component for Angular
 <app-ngx-comparison-slider
   [preImageUrl]="'http://lorempixel.com/600/400/sports/1'"
   [postImageUrl]="'http://lorempixel.com/600/400/sports/2'"
+  [sliderPosPct]="80"
 >
 </app-ngx-comparison-slider>
 ```
+
+Optional parameters
+ - sliderPosPct
