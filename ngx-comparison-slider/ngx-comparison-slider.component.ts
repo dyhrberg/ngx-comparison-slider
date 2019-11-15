@@ -1,6 +1,6 @@
 import { Component, Input, OnInit, AfterViewInit, ViewChild, ElementRef, Renderer2, Self, HostListener } from '@angular/core';
-import { of, fromEvent, merge, Observable } from 'rxjs';
-import { mapTo, mergeMap, takeUntil, tap } from 'rxjs/operators';
+import { fromEvent, merge, Observable } from 'rxjs';
+import { mergeMap, takeUntil, tap } from 'rxjs/operators';
 
 @Component({
   selector: 'app-ngx-comparison-slider',
@@ -8,11 +8,11 @@ import { mapTo, mergeMap, takeUntil, tap } from 'rxjs/operators';
   styleUrls: ['./ngx-comparison-slider.component.css']
 })
 export class NgxComparisonSliderComponent implements OnInit, AfterViewInit {
+  @Input() sliderPosPct = 40; // Default position 40% if not specified.
   @Input() preImageUrl: string;
   @Input() postImageUrl: string;
-  @Input() startPosPct: number; // Not implemented
-  @Input() minPosPct: number; // Not implemented
-  @Input() maxPosPct: number; // Not implemented
+  @Input() minPosPct = 0; // Not implemented
+  @Input() maxPosPct = 100; // Not implemented
 
   @ViewChild('slider', { static: true }) slider: ElementRef;
   @ViewChild('preImg', { static: true }) preImage: ElementRef;
@@ -28,8 +28,6 @@ export class NgxComparisonSliderComponent implements OnInit, AfterViewInit {
   sliderWidth = 0;
   sliderHeight = 0;
 
-  sliderPositionPct = 0;
-
   constructor(@Self() private self: ElementRef, private renderer: Renderer2) {}
 
   ngOnInit() {}
@@ -37,37 +35,18 @@ export class NgxComparisonSliderComponent implements OnInit, AfterViewInit {
   ngAfterViewInit() {
     // Setting the initial size of the postImage
     this.matchImageSizeToComponent();
-
     this.setupDraggingEventStream();
 
-    this.sliderActive$.subscribe(movement => {
-      // Get the cursor's x position
-      let gripPosition = this.getCursorPos(movement);
-
-      // Prevent the slider from being positioned outside the image
-      if (gripPosition < 0) {
-        gripPosition = 0;
-      }
-
-      if (gripPosition > this.componentWidth) {
-        gripPosition = this.componentWidth;
-      }
-
-      // Persising position as pct to recalculate position during resize
-      this.sliderPositionPct = gripPosition / this.componentWidth;
-      // console.log(this.sliderPositionPct);
-
-      // this.sliderPositionPct = this.startPosPct;
-
-      // Change size of resizer, according to the grip
-      this.resize(this.sliderPositionPct);
-    });
+    // Setting the slider at the correct start position
+    this.slide(this.sliderPosPct);
   }
 
   @HostListener('window:resize', ['$event.target'])
   onResize() {
     this.matchImageSizeToComponent();
-    this.resize(this.sliderPositionPct);
+    this.slide(this.sliderPosPct);
+
+    console.log('Resize');
   }
 
   setupDraggingEventStream() {
@@ -104,6 +83,26 @@ export class NgxComparisonSliderComponent implements OnInit, AfterViewInit {
     // touchMove$.subscribe((result: TouchEvent) => console.log(result.touches[0].screenX));
 
     this.sliderActive$ = down$.pipe(mergeMap(down => move$.pipe(takeUntil(up$))));
+
+    this.sliderActive$.subscribe(movement => {
+      // Get the cursor's x position
+      let gripPosition = this.getCursorPos(movement);
+
+      // Prevent the slider from being positioned outside the image
+      if (gripPosition < 0) {
+        gripPosition = 0;
+      }
+
+      if (gripPosition > this.componentWidth) {
+        gripPosition = this.componentWidth;
+      }
+
+      // Persising position as pct to recalculate position during resize
+      this.sliderPosPct = (gripPosition / this.componentWidth) * 100;
+
+      // Change size of resizer, according to the grip
+      this.slide(this.sliderPosPct);
+    });
   }
 
   matchImageSizeToComponent() {
@@ -114,12 +113,8 @@ export class NgxComparisonSliderComponent implements OnInit, AfterViewInit {
     this.renderer.setStyle(this.postImage.nativeElement, 'width', this.componentWidth + 'px');
   }
 
-  getCursorPos(event): number {
-    // Standard way of saying "if the parameter was not passed, default it
-    // to whatever's after the ||". In this case, if the event parameter is not
-    // passed, then it looks for the global variable.
-    event = event || window.event;
-
+  getCursorPos(event: any): number {
+    // Attempt to stop dragging images. But seems not to work
     event.stopPropagation();
 
     // Get the rect position of the image
@@ -137,9 +132,9 @@ export class NgxComparisonSliderComponent implements OnInit, AfterViewInit {
     return imgRelativePosX;
   }
 
-  resize(sliderPositionPct: number) {
+  slide(sliderPositionPct: number) {
     // Recalculate position from pct to px
-    const resizePosition = this.componentWidth * sliderPositionPct;
+    const resizePosition = this.componentWidth * (sliderPositionPct / 100);
     // Resize the image by changing the size of the resizer
     this.renderer.setStyle(this.resizer.nativeElement, 'width', resizePosition + 'px');
     // Position the grip
