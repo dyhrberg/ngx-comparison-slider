@@ -17,3 +17,5 @@ Image comparison slider component for Angular
 
 Optional parameters
  - sliderPosPct
+ - gripLineWidth
+ - gripLineColor
