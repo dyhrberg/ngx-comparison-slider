@@ -1,7 +1,7 @@
-<div class="slider" draggable="false" #slider>
-  <img src="{{ preImageUrl }}" #preImg />
+<div class="slider" draggable="false" #slider draggable="false">
+  <img src="{{ preImageUrl }}" #preImg draggable="false" />
   <div class="resizer" #resizer>
-    <img src="{{ postImageUrl }}" #postImg />
+    <img src="{{ postImageUrl }}" #postImg draggable="false" />
   </div>
   <span class="grip" #grip></span>
 </div>

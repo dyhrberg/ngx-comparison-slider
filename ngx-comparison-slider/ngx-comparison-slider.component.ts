@@ -8,9 +8,13 @@ import { mergeMap, takeUntil, tap } from 'rxjs/operators';
   styleUrls: ['./ngx-comparison-slider.component.css']
 })
 export class NgxComparisonSliderComponent implements OnInit, AfterViewInit {
-  @Input() sliderPosPct = 40; // Default position 40% if not specified.
+  @Input() sliderPosPct = 50; // Default position middle of picture
   @Input() preImageUrl: string;
   @Input() postImageUrl: string;
+  @Input() gripLineWidth = 1; // Width of line seperating pre and post image
+  @Input() gripLineColor = 'lightgray'; // Color of line seperating pre and post image
+  @Input() gripRingWidth = 30; // Width of ring seperating pre and post image
+  @Input() gripRingColor = 'pink'; // Color of ring seperating pre and post image
   @Input() minPosPct = 0; // Not implemented
   @Input() maxPosPct = 100; // Not implemented
 
@@ -18,68 +22,72 @@ export class NgxComparisonSliderComponent implements OnInit, AfterViewInit {
   @ViewChild('preImg', { static: true }) preImage: ElementRef;
   @ViewChild('postImg', { static: true }) postImage: ElementRef;
   @ViewChild('resizer', { static: true }) resizer: ElementRef;
-  @ViewChild('grip', { static: false }) grip: ElementRef;
+  @ViewChild('grip', { static: false }) gripLine: ElementRef;
+  // @ViewChild('grip:after', { static: false }) grip: ElementRef;
 
   sliderActive$: Observable<Event>;
 
   componentHeight = 0;
   componentWidth = 0;
 
-  sliderWidth = 0;
   sliderHeight = 0;
 
-  constructor(@Self() private self: ElementRef, private renderer: Renderer2) {}
+  constructor(private renderer: Renderer2) {}
 
   ngOnInit() {}
 
   ngAfterViewInit() {
+    // Override styles with optional setting
+    this.renderer.setStyle(this.gripLine.nativeElement, 'width', this.gripLineWidth + 'px');
+    this.renderer.setStyle(this.gripLine.nativeElement, 'margin-left', -this.gripLineWidth / 2 + 'px');
+    this.renderer.setStyle(this.gripLine.nativeElement, 'background', this.gripLineColor);
+    // this.renderer.setStyle(this.grip.nativeElement, 'border', this.gripRingWidth + 'px');
+    // this.renderer.setStyle(this.grip.nativeElement, 'border-color', this.gripRingColor);
+
     // Setting the initial size of the postImage
-    this.matchImageSizeToComponent();
+    this.adjustImageSizeToComponent();
     this.setupDraggingEventStream();
 
     // Setting the slider at the correct start position
     this.slide(this.sliderPosPct);
+
+    console.log(this.gripLine);
   }
 
   @HostListener('window:resize', ['$event.target'])
   onResize() {
-    this.matchImageSizeToComponent();
+    this.adjustImageSizeToComponent();
     this.slide(this.sliderPosPct);
-
-    console.log('Resize');
   }
 
   setupDraggingEventStream() {
     // Setting up 'down events'
-    const mouseDown$ = fromEvent(this.grip.nativeElement, 'mousedown');
-    const touchDown$ = fromEvent(this.grip.nativeElement, 'touchstart');
+    const mouseDown$ = fromEvent(this.gripLine.nativeElement, 'mousedown');
+    const touchDown$ = fromEvent(this.gripLine.nativeElement, 'touchstart');
     const down$ = merge(mouseDown$, touchDown$).pipe(
       tap((event: MouseEvent) => {
         event.stopPropagation(); // Prevent dragging the images (not sure if this is appropriate or even works)
-        this.grip.nativeElement.classList.add('draggable');
-        this.resizer.nativeElement.classList.add('resizable');
-        // this.renderer.setAttribute(this.grip.nativeElement, 'class', 'draggable');
-        // this.renderer.setAttribute(this.resizer.nativeElement, 'class', 'resizable');
+        this.renderer.addClass(this.gripLine.nativeElement, 'draggable');
+        this.renderer.addClass(this.resizer.nativeElement, 'resizable');
       })
     );
 
     // Setting up 'up events'
     const mouseUp$ = fromEvent(window, 'mouseup');
-    const touchUp$ = fromEvent(window, 'touchstop touchend touchcancel');
+    const touchUp$ = fromEvent(window, 'touchstop');
     const touchEnd$ = fromEvent(window, 'touchend');
     const touchCancel$ = fromEvent(window, 'touchcancel');
     const up$ = merge(mouseUp$, touchUp$, touchEnd$, touchCancel$).pipe(
-      tap(() => {
-        this.grip.nativeElement.classList.remove('draggable');
-        this.resizer.nativeElement.classList.remove('resizable');
-        // this.renderer.removeAttribute(this.grip.nativeElement, 'class', 'draggable');
-        // this.renderer.removeAttribute(this.resizer.nativeElement, 'class', 'resizable');
+      tap(event => {
+        event.preventDefault();
+        this.renderer.removeClass(this.gripLine.nativeElement, 'draggable');
+        this.renderer.removeClass(this.resizer.nativeElement, 'resizable');
       })
     );
 
     const mouseMove$ = fromEvent(window, 'mousemove');
     const touchMove$ = fromEvent(window, 'touchmove');
-    const move$ = merge(mouseMove$, touchMove$);
+    const move$ = merge(mouseMove$, touchMove$).pipe(tap(event => event.preventDefault()));
     // touchMove$.subscribe((result: TouchEvent) => console.log(result.touches[0].screenX));
 
     this.sliderActive$ = down$.pipe(mergeMap(down => move$.pipe(takeUntil(up$))));
@@ -105,7 +113,7 @@ export class NgxComparisonSliderComponent implements OnInit, AfterViewInit {
     });
   }
 
-  matchImageSizeToComponent() {
+  adjustImageSizeToComponent() {
     // Persist slider component width (after view init)
     this.componentWidth = this.slider.nativeElement.offsetWidth;
 
@@ -135,9 +143,11 @@ export class NgxComparisonSliderComponent implements OnInit, AfterViewInit {
   slide(sliderPositionPct: number) {
     // Recalculate position from pct to px
     const resizePosition = this.componentWidth * (sliderPositionPct / 100);
+
     // Resize the image by changing the size of the resizer
     this.renderer.setStyle(this.resizer.nativeElement, 'width', resizePosition + 'px');
+
     // Position the grip
-    this.renderer.setStyle(this.grip.nativeElement, 'left', resizePosition - this.sliderWidth / 4 + 'px');
+    this.renderer.setStyle(this.gripLine.nativeElement, 'left', resizePosition - this.gripLineWidth / 4 + 'px');
   }
 }

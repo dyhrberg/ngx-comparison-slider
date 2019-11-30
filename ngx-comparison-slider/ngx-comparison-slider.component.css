@@ -1,6 +1,9 @@
 .slider {
   position: relative;
   overflow: hidden;
+
+  /* This is required to disable back and forth touch gestures */
+  touch-action: none;
 }
 
 .slider img {
@@ -22,38 +25,39 @@
   left: 50%;
   top: 0;
   bottom: 0;
-  width: 4px;
-  margin-left: -2px;
-
-  background: rgba(0, 0, 0, 0.5);
+  width: 1px;
+  margin-left: 0px;
+  background: lightgray;
   cursor: ew-resize;
 }
 
 .grip:after {
   position: absolute;
   top: 50%;
-  width: 64px;
-  height: 64px;
-  margin: -32px 0 0 -32px;
-
-  content: '\21d4';
+  width: 34px;
+  height: 34px;
+  margin: -18px 0 0 -18px;
+  content: '';
   color: white;
-  font-weight: bold;
-  font-size: 36px;
-  text-align: center;
-  line-height: 64px;
 
-  background: #ffb800; /* @orange */
-  border: 1px solid #e6a600; /* darken(@orange, 5%) */
+  /* content: '\27F7'; */
+  /* color: white;
+  font-size: 28px;
+  line-height: 31px;
+  font-weight: 700;
+  background: url(../../assets/chevron.svg) no-repeat center center; */
+
+  border: 3px;
+  border-style: solid;
+  border-color: #f47c22;
   border-radius: 50%;
   transition: all 0.3s ease;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3), inset 0 2px 0 rgba(255, 255, 255, 0.5), inset 0 60px 50px -30px #ffd466; /* lighten(@orange, 20%)*/
 }
 
 .grip.draggable:after {
-  width: 48px;
-  height: 48px;
-  margin: -24px 0 0 -24px;
+  width: 37px;
+  height: 37px;
+  margin: -20px 0 0 -20px;
   line-height: 50px;
   font-size: 30px;
 }
